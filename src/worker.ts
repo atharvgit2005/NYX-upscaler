@@ -95,54 +95,57 @@ async function switchNetwork(name: string, weights: any, bitmap: ImageBitmap): P
 self.onmessage = async function (event: MessageEvent<WorkerRequestMessage>) {
   if (!event.data.cmd) return;
 
-  switch (event.data.cmd) {
-    case 'init':
-      await init(event.data.data);
-      break;
+  try {
+    switch (event.data.cmd) {
+      case 'init':
+        await init(event.data.data);
+        break;
 
-    case 'isSupported':
-      await isSupported();
-      break;
+      case 'isSupported':
+        await isSupported();
+        break;
 
-    case 'pause':
-      if (!pauseLock) {
-        pauseLock = new Promise(resolve => { resolvePause = resolve; });
-        postMessage({ cmd: 'paused' } satisfies WorkerResponseMessage);
-      }
-      break;
+      case 'pause':
+        if (!pauseLock) {
+          pauseLock = new Promise(resolve => { resolvePause = resolve; });
+          postMessage({ cmd: 'paused' } satisfies WorkerResponseMessage);
+        }
+        break;
 
-    case 'resume':
-      if (pauseLock && resolvePause) {
-        resolvePause();
-        pauseLock = null;
-        resolvePause = null;
-        postMessage({ cmd: 'resumed' } satisfies WorkerResponseMessage);
-      }
-      break;
-    
-    case 'process':
+      case 'resume':
+        if (pauseLock && resolvePause) {
+          resolvePause();
+          pauseLock = null;
+          resolvePause = null;
+          postMessage({ cmd: 'resumed' } satisfies WorkerResponseMessage);
+        }
+        break;
+      
+      case 'process':
+        await pipelineProcessor({
+          inputHandle: event.data.inputHandle,
+          outputHandle: event.data.outputHandle,
+          websr,
+          upscaled_canvas,
+          original_canvas,
+          resolution,
+          getPauseLock: () => pauseLock
+        });
+        break;
 
-
-      await pipelineProcessor({
-        inputHandle: event.data.inputHandle,
-        outputHandle: event.data.outputHandle,
-        websr,
-        upscaled_canvas,
-        original_canvas,
-        resolution,
-        getPauseLock: () => pauseLock
-      });
-
-     // To use MediaBunny instead, uncomment above import and use:
- //    await mediabunnyProcessor({ inputHandle: event.data.inputHandle, outputHandle: event.data.outputHandle, websr, upscaled_canvas, original_canvas, resolution, getPauseLock: () => pauseLock });
-      break;
-
-    case 'network':
-      await switchNetwork(
-        event.data.data.name,
-        event.data.data.weights,
-        event.data.data.bitmap
-      );
-      break;
+      case 'network':
+        await switchNetwork(
+          event.data.data.name,
+          event.data.data.weights,
+          event.data.data.bitmap
+        );
+        break;
+    }
+  } catch (err: any) {
+    console.error('Worker command error:', err);
+    postMessage({
+      cmd: 'error',
+      data: err?.message || String(err)
+    } satisfies WorkerResponseMessage);
   }
 };

@@ -230,11 +230,20 @@ async function loadVideo(fileOrHandle: FileSystemFileHandle | File): Promise<voi
  */
 async function setupPreview(file: File): Promise<void> {
     video = document.createElement('video');
-    video.src = URL.createObjectURL(file);
+    video.preload = 'auto';
+
+    video.onerror = (e) => {
+        console.error('Video load error:', e);
+        showError('Failed to load video file. Please ensure it is a supported video format.');
+    };
 
     const imageCompare = document.getElementById('image-compare-outer') as HTMLElement;
 
-    video.onloadeddata = async function () {
+    let hasLoaded = false;
+    const onVideoReady = async function () {
+        if (hasLoaded || !video.videoWidth || !video.videoHeight) return;
+        hasLoaded = true;
+
         Alpine.store('width', video.videoWidth);
         Alpine.store('height', video.videoHeight);
 
@@ -279,46 +288,62 @@ async function setupPreview(file: File): Promise<void> {
         };
     };
 
+    video.onloadeddata = onVideoReady;
+    video.onloadedmetadata = onVideoReady;
+
+    video.src = URL.createObjectURL(file);
+    video.load();
+
+    if (video.readyState >= 1) {
+        onVideoReady();
+    }
+
     async function showPreview() {
-        window.initRecording = initRecording;
-        window.fullScreenPreview = fullScreenPreview;
+        try {
+            window.initRecording = initRecording;
+            window.fullScreenPreview = fullScreenPreview;
 
-        const bitmap = await createImageBitmap(video);
+            const bitmap = await createImageBitmap(video);
 
-        if (!canvasesTransferred) {
-            const upscaled = upscaled_canvas.transferControlToOffscreen();
-            const original = original_canvas.transferControlToOffscreen();
-            canvasesTransferred = true;
+            if (!canvasesTransferred) {
+                const upscaled = upscaled_canvas.transferControlToOffscreen();
+                const original = original_canvas.transferControlToOffscreen();
+                canvasesTransferred = true;
 
-            worker.postMessage({
-                cmd: "init",
-                data: {
-                    bitmap,
-                    upscaled,
-                    original,
-                    resolution: {
-                        width: video.videoWidth,
-                        height: video.videoHeight
+                worker.postMessage({
+                    cmd: "init",
+                    data: {
+                        bitmap,
+                        upscaled,
+                        original,
+                        resolution: {
+                            width: video.videoWidth,
+                            height: video.videoHeight
+                        }
                     }
-                }
-            }, [bitmap, upscaled, original]);
-        } else {
-            worker.postMessage({
-                cmd: "init",
-                data: {
-                    bitmap,
-                    resolution: {
-                        width: video.videoWidth,
-                        height: video.videoHeight
+                }, [bitmap, upscaled, original]);
+            } else {
+                worker.postMessage({
+                    cmd: "init",
+                    data: {
+                        bitmap,
+                        resolution: {
+                            width: video.videoWidth,
+                            height: video.videoHeight
+                        }
                     }
-                }
-            }, [bitmap]);
+                }, [bitmap]);
+            }
+
+            content = 'rl';
+            await updateNetwork();
+            Alpine.store('style', 'rl');
+            Alpine.store('state', 'preview');
+        } catch (err: any) {
+            console.error('showPreview error:', err);
+            showError('Failed to generate video preview: ' + (err?.message || err));
         }
-
-        content = 'rl';
-        await updateNetwork();
-        Alpine.store('style', 'rl');
-        Alpine.store('state', 'preview');
+    }
 
 
 
@@ -435,19 +460,14 @@ async function setupPreview(file: File): Promise<void> {
             original_canvas.style.height = `${displayHeight}px`;
         }
 
-        async function fullScreenPreview(e) {
+        async function fullScreenPreview(e?: Event) {
             imageCompare.requestFullscreen();
             setTimeout(canvasFullScreen, 20);
             setTimeout(canvasFullScreen, 60);
             setTimeout(canvasFullScreen, 200);
-
         }
 
-
         Alpine.store('state', 'preview');
-
-
-
 
         window.switchNetworkSize = async function(el: HTMLInputElement){
             if(el.value !== size){
@@ -464,12 +484,7 @@ async function setupPreview(file: File): Promise<void> {
                 await updateNetwork();
             }
         }
-
-
-
     }
-
-}
 
 
 /**
