@@ -118,6 +118,19 @@ async function index(): Promise<void> {
 
     window.chooseFile = chooseFile;
     window.handleFileInput = handleFileInput;
+
+    if ((window as any).electronAPI && typeof (window as any).electronAPI.getAutoInput === 'function') {
+        (window as any).electronAPI.getAutoInput().then(async (autoPath: string | null) => {
+            if (autoPath) {
+                const res = await (window as any).electronAPI.readLocalFile(autoPath);
+                if (res && res.buffer) {
+                    const file = new File([res.buffer], res.name, { type: 'video/mp4' });
+                    await loadVideo(file);
+                    setTimeout(() => initRecording(), 1500);
+                }
+            }
+        });
+    }
 }
 
 /**
@@ -550,7 +563,17 @@ worker.onmessage = function (event: MessageEvent<WorkerResponseMessage>) {
 
     } else if (event.data.cmd === 'finished') {
         Alpine.store('state', 'complete');
-        Alpine.store('download_url', event.data.data ? window.URL.createObjectURL(event.data.data) : null);
+        const blob = event.data.data;
+        if (blob) {
+            Alpine.store('download_url', window.URL.createObjectURL(blob));
+            if ((window as any).electronAPI && typeof (window as any).electronAPI.saveFile === 'function') {
+                blob.arrayBuffer().then(buf => {
+                    const name = Alpine.store('download_name') || 'upscaled.mp4';
+                    const savePath = 'C:\\Users\\Atharv Paharia\\OneDrive\\Desktop\\upscaler\\' + name;
+                    (window as any).electronAPI.saveFile(savePath, buf);
+                });
+            }
+        }
     }
     else if (event.data.cmd === 'paused') {
         Alpine.store('state', 'paused');
