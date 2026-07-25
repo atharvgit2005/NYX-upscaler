@@ -57,7 +57,8 @@ module.exports = {
                 { from: "src/*.js", to: path.basename('[name].js') },
                 { from: "src/img/*.svg", to: path.basename('[name].svg') },
                 { from: "src/img/*.png", to: path.basename('[name].png') },
-
+                { from: "node_modules/web-demuxer/dist/wasm-files/web-demuxer.wasm", to: "web-demuxer.wasm" },
+                { from: "node_modules/@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2", to: "fonts/manrope-latin-wght-normal.woff2" }
             ]
         })
 
@@ -69,6 +70,11 @@ module.exports = {
     devServer: {
         static: {
             directory: path.join(__dirname, 'dist'),
+        },
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cross-Origin-Opener-Policy": "same-origin",
+            "Cross-Origin-Embedder-Policy": "require-corp"
         },
         compress: true,
         port: 8080,

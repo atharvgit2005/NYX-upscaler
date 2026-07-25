@@ -17,7 +17,7 @@ import WebSR from '@websr/websr';
 import InMemoryStorage from './in-memory-storage';
 
 interface ProcessorArgs {
-  inputHandle: FileSystemFileHandle;
+  inputHandle: FileSystemFileHandle | File;
   outputHandle?: FileSystemFileHandle;
   websr: WebSR;
   upscaled_canvas: OffscreenCanvas;
@@ -44,8 +44,10 @@ function prettyTime(secs: number): string {
 export default async function mediabunnyProcessor(args: ProcessorArgs): Promise<void> {
   const { inputHandle, outputHandle, websr, upscaled_canvas, original_canvas, resolution, getPauseLock } = args;
 
-  // Get the file from the handle
-  const file = await inputHandle.getFile();
+  // Get file from handle or direct File object
+  const file = (inputHandle instanceof File)
+    ? inputHandle
+    : await (inputHandle as FileSystemFileHandle).getFile();
 
   // MediaBunny handles streaming from the blob for large files
   const source = new BlobSource(file);

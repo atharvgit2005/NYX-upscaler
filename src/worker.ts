@@ -45,19 +45,21 @@ async function init(config: InitData): Promise<void> {
     gpu = await WebSR.initWebGPU();
   }
 
+  if (config.upscaled) upscaled_canvas = config.upscaled;
+  if (config.original) {
+    original_canvas = config.original;
+    ctx = original_canvas.getContext('bitmaprenderer');
+  }
+
   websr = new WebSR({
     network_name: "anime4k/cnn-2x-m",
     weights,
     resolution: config.resolution,
     gpu: gpu,
-    canvas: config.upscaled as any // OffscreenCanvas is valid but types may be strict
+    canvas: upscaled_canvas as any
   });
 
   resolution = config.resolution;
-  upscaled_canvas = config.upscaled;
-  original_canvas = config.original;
-
-  ctx = original_canvas.getContext('bitmaprenderer');
 
   const bitmap2 = await createImageBitmap(config.bitmap, {
     resizeHeight: config.resolution.height * 2,

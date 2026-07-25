@@ -11,7 +11,7 @@ import WebSR from '@websr/websr';
 import InMemoryStorage from './in-memory-storage';
 
 interface ProcessorArgs {
-  inputHandle: FileSystemFileHandle;
+  inputHandle: FileSystemFileHandle | File;
   outputHandle?: FileSystemFileHandle;
   websr: WebSR;
   upscaled_canvas: OffscreenCanvas;
@@ -33,7 +33,7 @@ class DemuxerTrackingStream extends TransformStream<EncodedVideoChunk, { chunk: 
         async transform(chunk, controller) {
           // Apply backpressure if downstream is full
           while (controller.desiredSize !== null && controller.desiredSize < 0) {
-            await new Promise((r) => setTimeout(r, 10));
+            await new Promise((r) => setTimeout(r, 2));
           }
 
           controller.enqueue({ chunk, index: chunkIndex++ });
@@ -82,12 +82,12 @@ class VideoDecoderStream extends TransformStream<
           }
           // Check decoder queue backpressure
           while (decoder.decodeQueueSize >= 20) {
-            await new Promise((r) => setTimeout(r, 10));
+            await new Promise((r) => setTimeout(r, 2));
           }
 
           // Check downstream backpressure
           while (controller.desiredSize !== null && controller.desiredSize < 0) {
-            await new Promise((r) => setTimeout(r, 10));
+            await new Promise((r) => setTimeout(r, 2));
           }
 
           pendingIndices.push(item.index);
@@ -133,20 +133,22 @@ class VideoUpscaleStream extends TransformStream<
           }
           const { frame, index } = item;
 
-          // Create "before" preview (resized to 2x)
-          const beforeBitmap = await createImageBitmap(frame, {
-            resizeHeight: frame.codedHeight * 2,
-            resizeWidth: frame.codedWidth * 2
-          });
+          // Update "before" preview canvas periodically (every 30 frames) to save GPU/RAM allocations
+          if (index % 30 === 0) {
+            const beforeBitmap = await createImageBitmap(frame, {
+              resizeHeight: frame.codedHeight * 2,
+              resizeWidth: frame.codedWidth * 2
+            });
+            const ctx = original_canvas.getContext('bitmaprenderer');
+            if (ctx) {
+              ctx.transferFromImageBitmap(beforeBitmap);
+            } else {
+              beforeBitmap.close();
+            }
+          }
 
           // Render upscaled frame to canvas
           await websr.render(frame);
-
-          // Update "before" preview canvas
-          const ctx = original_canvas.getContext('bitmaprenderer');
-          if (ctx) {
-            ctx.transferFromImageBitmap(beforeBitmap);
-          }
 
           // Create upscaled VideoFrame from canvas
           const upscaledFrame = new VideoFrame(upscaled_canvas, {
@@ -194,12 +196,12 @@ class VideoEncoderStream extends TransformStream<
         async transform(item, controller) {
           // Check encoder queue backpressure
           while (encoder.encodeQueueSize >= 20) {
-            await new Promise((r) => setTimeout(r, 10));
+            await new Promise((r) => setTimeout(r, 2));
           }
 
           // Check downstream backpressure
           while (controller.desiredSize !== null && controller.desiredSize < 0) {
-            await new Promise((r) => setTimeout(r, 10));
+            await new Promise((r) => setTimeout(r, 2));
           }
 
           // Encode with keyframe every 60 frames
@@ -319,12 +321,14 @@ export default async function pipelineProcessor(args: ProcessorArgs): Promise<vo
 
   console.log('Starting pipeline processor with Streams API');
 
-  // Get file from handle
-  const file = await inputHandle.getFile();
+  // Get file from handle or direct File object
+  const file = (inputHandle instanceof File)
+    ? inputHandle
+    : await (inputHandle as FileSystemFileHandle).getFile();
 
   // Initialize demuxer
   const demuxer = new WebDemuxer({
-    wasmFilePath: "https://cdn.jsdelivr.net/npm/web-demuxer@latest/dist/wasm-files/web-demuxer.wasm",
+    wasmFilePath: "web-demuxer.wasm",
   });
 
   await demuxer.load(file);
@@ -339,6 +343,7 @@ export default async function pipelineProcessor(args: ProcessorArgs): Promise<vo
   }
 
   const videoDecoderConfig = await demuxer.getDecoderConfig('video');
+  videoDecoderConfig.hardwareAcceleration = 'prefer-hardware';
   const audioConfig = audioTrack ? await demuxer.getDecoderConfig('audio') : null;
 
   const duration = videoTrack.duration;
@@ -372,7 +377,7 @@ export default async function pipelineProcessor(args: ProcessorArgs): Promise<vo
   const [fpsNum, fpsDen] = (videoTrack.r_frame_rate || '30/1').split('/').map(Number);
   const framerate = (fpsNum && fpsDen) ? fpsNum / fpsDen : 30;
 
-  // Configure encoder
+  // Configure encoder with hardware acceleration
   const bitrate = 2.5e6 * (width * height * 4) / (1280 * 720);
 
   const videoEncoderConfig: VideoEncoderConfig = {
@@ -381,6 +386,8 @@ export default async function pipelineProcessor(args: ProcessorArgs): Promise<vo
     height: height * 2,
     bitrate: Math.round(bitrate),
     framerate: framerate,
+    hardwareAcceleration: 'prefer-hardware',
+    latencyMode: 'quality',
   };
 
   const videoSource = new EncodedVideoPacketSource('avc');

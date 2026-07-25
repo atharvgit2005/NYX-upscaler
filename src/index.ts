@@ -19,7 +19,7 @@ let original_canvas: HTMLCanvasElement;
 let video: HTMLVideoElement;
 
 // Network selection
-type NetworkSize = 'small' | 'medium' | 'large';
+type NetworkSize = 'small' | 'medium' | 'large' | 'ultra';
 type ContentType = 'rl' | 'an' | '3d';
 
 let size: NetworkSize = 'medium';
@@ -39,6 +39,11 @@ type WeightsMap = {
 };
 
 const weights: WeightsMap = {
+    'ultra': {
+        'rl': require('./weights/cnn-2x-l-v2.json'),
+        'an': require('./weights/cnn-2x-l-v2.json'),
+        '3d': require('./weights/cnn-2x-l-v2.json'),
+    },
     'large': {
         'rl': require('./weights/cnn-2x-l-rl.json'),
         'an': require('./weights/cnn-2x-l-an.json'),
@@ -65,6 +70,9 @@ const networks: Record<NetworkSize, { name: string }> = {
         name: "anime4k/cnn-2x-m",
     },
     'large': {
+        name: "anime4k/cnn-2x-l",
+    },
+    'ultra': {
         name: "anime4k/cnn-2x-l",
     }
 };
@@ -155,20 +163,17 @@ async function loadVideo(fileHandle: FileSystemFileHandle): Promise<void> {
     Alpine.store('download_name', download_name);
     Alpine.store('filename', file.name);
 
-    // Read file for preview setup
-    const arrayBuffer = await file.arrayBuffer();
-    await setupPreview(arrayBuffer);
+    // Set up preview directly using Blob URL without loading entire file into memory
+    await setupPreview(file);
 }
 
 /**
  * Set up the preview UI with before/after comparison
  */
-async function setupPreview(data: ArrayBuffer): Promise<void> {
+async function setupPreview(file: File): Promise<void> {
     video = document.createElement('video');
 
-    const fileBlob = new Blob([data], { type: "video/mp4" });
-
-    video.src = URL.createObjectURL(fileBlob);
+    video.src = URL.createObjectURL(file);
 
     const imageCompare = document.getElementById('image-compare-outer') as HTMLElement;
 
@@ -304,16 +309,13 @@ async function setupPreview(data: ArrayBuffer): Promise<void> {
             Alpine.store('target', 'writer');
         } else {
             Alpine.store('target', 'blob');
+            const estimate = await navigator.storage.estimate();
+            if (estimate.quota && estimated_size > estimate.quota) {
+                Alpine.store('target', 'writer');
+            }
         }
 
-        const quota = (await navigator.storage.estimate()).quota;
-
-        if(estimated_size > quota){
-            return showError(`The video is too big. It would output a file of ${humanFileSize(estimated_size)} but the browser can only write files up to ${humanFileSize(quota)}`);
-        }
-
-
-        Alpine.store('size', humanFileSize(estimated_size))
+        Alpine.store('size', humanFileSize(estimated_size));
 
 
         function canvasFullScreen(){

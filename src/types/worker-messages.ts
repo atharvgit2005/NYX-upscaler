@@ -13,14 +13,14 @@ export type WorkerRequestMessage =
   | { cmd: 'isSupported' }
   | { cmd: 'init'; data: InitData }
   | { cmd: 'network'; data: NetworkData }
-  | { cmd: 'process'; inputHandle: FileSystemFileHandle; outputHandle?: FileSystemFileHandle }
+  | { cmd: 'process'; inputHandle: FileSystemFileHandle | File; outputHandle?: FileSystemFileHandle }
   | { cmd: 'pause' }
   | { cmd: 'resume' };
 
 export interface InitData {
   bitmap: ImageBitmap;
-  upscaled: OffscreenCanvas;
-  original: OffscreenCanvas;
+  upscaled?: OffscreenCanvas;
+  original?: OffscreenCanvas;
   resolution: Resolution;
 }
 
