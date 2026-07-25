@@ -80,8 +80,10 @@ export default async function mediabunnyProcessor(args: ProcessorArgs): Promise<
     target: target,
   });
 
+  const codec = (resolution.width * 2 > 4096 || resolution.height * 2 > 2304) ? 'avc1.64003c' : 'avc';
+
   const videoSource = new CanvasSource(upscaled_canvas, {
-    codec: 'avc',
+    codec: codec as any,
     bitrate: QUALITY_HIGH,
     keyFrameInterval: 60,
   });
