@@ -27,7 +27,9 @@ let content: ContentType = 'rl';
 
 // Video data
 let download_name: string;
-let inputFileHandle: FileSystemFileHandle;
+let inputFileHandle: FileSystemFileHandle | undefined;
+let inputFile: File;
+let canvasesTransferred = false;
 let gpu: any;
 let websr: WebSR;
 
@@ -81,6 +83,7 @@ const networks: Record<NetworkSize, { name: string }> = {
 declare global {
     interface Window {
         chooseFile: (e?: Event) => Promise<void>;
+        handleFileInput: (e: Event) => Promise<void>;
         initRecording: () => Promise<void>;
         fullScreenPreview: (e?: Event) => Promise<void>;
         switchNetworkSize: (el: HTMLInputElement) => Promise<void>;
@@ -109,11 +112,44 @@ async function index(): Promise<void> {
 
     if (!("VideoEncoder" in window)) return showUnsupported("WebCodecs");
 
-    if (!window.showSaveFilePicker) return showUnsupported("File Write System API");
+    setupDragAndDrop();
 
     worker.postMessage({ cmd: 'isSupported' } satisfies WorkerRequestMessage);
 
     window.chooseFile = chooseFile;
+    window.handleFileInput = handleFileInput;
+}
+
+/**
+ * Configure global drag and drop support for video files
+ */
+function setupDragAndDrop(): void {
+    const dropZone = document.getElementById('file-load-panel') || document.body;
+
+    window.addEventListener('dragover', (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropZone) dropZone.classList.add('border-blue-600', 'bg-blue-50/50');
+    });
+
+    window.addEventListener('dragleave', (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropZone) dropZone.classList.remove('border-blue-600', 'bg-blue-50/50');
+    });
+
+    window.addEventListener('drop', async (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropZone) dropZone.classList.remove('border-blue-600', 'bg-blue-50/50');
+
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const droppedFile = e.dataTransfer.files[0];
+            if (droppedFile.type.startsWith('video/') || droppedFile.name.match(/\.(mp4|mkv|mov|avi|webm|m4v)$/i)) {
+                await loadVideo(droppedFile);
+            }
+        }
+    });
 }
 
 /**
@@ -125,46 +161,68 @@ function showUnsupported(text: string): void {
 }
 
 /**
- * Prompt user to choose a video file using File System Access API
+ * Prompt user to choose a video file using File System Access API or fallback file input
  */
 async function chooseFile(e?: Event): Promise<void> {
-    try {
-        const [fileHandle] = await window.showOpenFilePicker({
-            types: [{
-                description: 'Video Files',
-                accept: { 'video/mp4': ['.mp4'] }
-            }],
-            multiple: false
-        });
+    if (window.showOpenFilePicker) {
+        try {
+            const [fileHandle] = await window.showOpenFilePicker({
+                types: [{
+                    description: 'Video Files',
+                    accept: {
+                        'video/*': ['.mp4', '.mkv', '.mov', '.avi', '.webm', '.m4v']
+                    }
+                }],
+                multiple: false
+            });
 
-        await loadVideo(fileHandle);
-    } catch (e) {
-        // User cancelled file picker
-        console.log('File selection cancelled');
+            await loadVideo(fileHandle);
+            return;
+        } catch (err: any) {
+            if (err.name === 'AbortError') return; // User cancelled
+            console.warn('showOpenFilePicker failed or cancelled, falling back to input:', err);
+        }
+    }
+
+    // Fallback to standard input element
+    const fileInput = document.getElementById('file-input') as HTMLInputElement;
+    if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+    }
+}
+
+/**
+ * Handle selection from standard <input type="file"> element
+ */
+async function handleFileInput(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+        await loadVideo(input.files[0]);
     }
 }
 
 //===================  Preview ===========================
 
 /**
- * Load video file from FileSystemFileHandle
+ * Load video file from FileSystemFileHandle or direct File object
  */
-async function loadVideo(fileHandle: FileSystemFileHandle): Promise<void> {
+async function loadVideo(fileOrHandle: FileSystemFileHandle | File): Promise<void> {
     Alpine.store('state', 'loading');
 
-    // Store the file handle for later processing
-    inputFileHandle = fileHandle;
+    if ('getFile' in fileOrHandle && typeof (fileOrHandle as any).getFile === 'function') {
+        inputFileHandle = fileOrHandle as FileSystemFileHandle;
+        inputFile = await (fileOrHandle as FileSystemFileHandle).getFile();
+    } else {
+        inputFileHandle = undefined;
+        inputFile = fileOrHandle as File;
+    }
 
-    // Get the file to create a preview
-    const file = await fileHandle.getFile();
-
-    // Set up download name
-    download_name = file.name.split(".")[0] + "-upscaled.mp4";
+    download_name = inputFile.name.split(".")[0] + "-upscaled.mp4";
     Alpine.store('download_name', download_name);
-    Alpine.store('filename', file.name);
+    Alpine.store('filename', inputFile.name);
 
-    // Set up preview directly using Blob URL without loading entire file into memory
-    await setupPreview(file);
+    await setupPreview(inputFile);
 }
 
 /**
@@ -172,35 +230,44 @@ async function loadVideo(fileHandle: FileSystemFileHandle): Promise<void> {
  */
 async function setupPreview(file: File): Promise<void> {
     video = document.createElement('video');
-
     video.src = URL.createObjectURL(file);
 
     const imageCompare = document.getElementById('image-compare-outer') as HTMLElement;
 
-
-
-    video.onloadeddata = async function (){
-
-
-
+    video.onloadeddata = async function () {
         Alpine.store('width', video.videoWidth);
         Alpine.store('height', video.videoHeight);
-        upscaled_canvas.width = video.videoWidth*2;
-        upscaled_canvas.height = video.videoHeight*2;
-        original_canvas.width = video.videoWidth*2;
-        original_canvas.height = video.videoHeight*2;
 
+        if (!canvasesTransferred) {
+            upscaled_canvas.width = video.videoWidth * 2;
+            upscaled_canvas.height = video.videoHeight * 2;
+            original_canvas.width = video.videoWidth * 2;
+            original_canvas.height = video.videoHeight * 2;
+        }
 
         imageCompare.style.height = '318px';
-        imageCompare.style.width =  `${Math.round(video.videoWidth/video.videoHeight*318)}px`
+        imageCompare.style.width = `${Math.round(video.videoWidth / video.videoHeight * 318)}px`;
         imageCompare.style.margin = 'auto';
         imageCompare.style.position = 'relative';
 
+        try {
+            new ImageCompare(document.getElementById('image-compare')).mount();
+        } catch (e) {
+            // Already mounted
+        }
 
-        new ImageCompare(document.getElementById('image-compare')).mount();
-        video.currentTime = video.duration * 0.2 || 0;
-        if(video.requestVideoFrameCallback)  video.requestVideoFrameCallback(showPreview);
-        else requestAnimationFrame(showPreview);
+        video.currentTime = (isFinite(video.duration) && video.duration > 0) ? video.duration * 0.2 : 0;
+
+        const triggerPreview = () => {
+            if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(showPreview);
+            else requestAnimationFrame(showPreview);
+        };
+
+        if (video.seeking) {
+            video.onseeked = triggerPreview;
+        } else {
+            triggerPreview();
+        }
 
         window.togglePause = function () {
             const currentState = Alpine.store('state');
@@ -210,43 +277,48 @@ async function setupPreview(file: File): Promise<void> {
                 worker.postMessage({ cmd: 'resume' } satisfies WorkerRequestMessage);
             }
         };
+    };
 
-    }
-
-
-
-
-    async function showPreview(){
-
-        const fullScreenButton = document.getElementById('full-screen');
-
-
+    async function showPreview() {
         window.initRecording = initRecording;
         window.fullScreenPreview = fullScreenPreview;
 
         const bitmap = await createImageBitmap(video);
 
+        if (!canvasesTransferred) {
+            const upscaled = upscaled_canvas.transferControlToOffscreen();
+            const original = original_canvas.transferControlToOffscreen();
+            canvasesTransferred = true;
 
-        const upscaled = upscaled_canvas.transferControlToOffscreen();
-        const original =    original_canvas.transferControlToOffscreen();
-
-
-        worker.postMessage({cmd: "init", data: {
-                bitmap,
-                upscaled,
-                original,
-                resolution: {
-                    width: video.videoWidth,
-                    height: video.videoHeight
+            worker.postMessage({
+                cmd: "init",
+                data: {
+                    bitmap,
+                    upscaled,
+                    original,
+                    resolution: {
+                        width: video.videoWidth,
+                        height: video.videoHeight
+                    }
                 }
+            }, [bitmap, upscaled, original]);
+        } else {
+            worker.postMessage({
+                cmd: "init",
+                data: {
+                    bitmap,
+                    resolution: {
+                        width: video.videoWidth,
+                        height: video.videoHeight
+                    }
+                }
+            }, [bitmap]);
+        }
 
-            }}, [bitmap, upscaled, original]);
-
-
-        // Default to 'rl' (real life) network
         content = 'rl';
         await updateNetwork();
         Alpine.store('style', 'rl');
+        Alpine.store('state', 'preview');
 
 
 
@@ -257,6 +329,8 @@ async function setupPreview(file: File): Promise<void> {
 
 
         function setFullScreenLocation(){
+            const fullScreenButton = document.getElementById('full-screen');
+            if (!fullScreenButton) return;
             const containerWidth = Math.round(video.videoWidth/video.videoHeight*318);
             const containerHeight = 318;
             
@@ -476,7 +550,7 @@ async function initRecording(): Promise<void> {
 
     worker.postMessage({
         cmd: "process",
-        inputHandle: inputFileHandle,
+        inputHandle: inputFileHandle || inputFile,
         outputHandle
     } satisfies WorkerRequestMessage);
 }

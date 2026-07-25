@@ -243,14 +243,14 @@ function createVideoMuxerWriter(
       }
       frameCount++;
 
-      // Report progress every 30 frames
-      if (frameCount % 30 === 0) {
+      // Report progress on first frame and every 5 frames after
+      if (frameCount % 5 === 0 || frameCount === 1) {
         const elapsed = performance.now() - startTime;
-        const progress = Math.floor((value.chunk.timestamp / 1000000) / duration * 100);
+        const progress = Math.min(100, Math.max(0, Math.floor((value.chunk.timestamp / 1000000) / duration * 100)));
 
         postMessage({ cmd: 'progress', data: progress });
 
-        if (elapsed > 1000) {
+        if (elapsed > 500 && progress > 0) {
           const processingRate = progress / elapsed;
           const eta = Math.round(((100 - progress) / processingRate) / 1000);
           postMessage({ cmd: 'eta', data: prettyTime(eta) });
