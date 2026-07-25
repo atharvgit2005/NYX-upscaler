@@ -327,38 +327,50 @@ async function setupPreview(file: File): Promise<void> {
 
             const bitmap = await createImageBitmap(video);
 
-            if (!canvasesTransferred) {
-                const upscaled = upscaled_canvas.transferControlToOffscreen();
-                const original = original_canvas.transferControlToOffscreen();
-                canvasesTransferred = true;
+            await new Promise<void>((resolve, reject) => {
+                const handler = (e: MessageEvent<WorkerResponseMessage>) => {
+                    if (e.data.cmd === 'inited') {
+                        worker.removeEventListener('message', handler);
+                        resolve();
+                    } else if (e.data.cmd === 'error') {
+                        worker.removeEventListener('message', handler);
+                        reject(new Error(e.data.data));
+                    }
+                };
+                worker.addEventListener('message', handler);
 
-                worker.postMessage({
-                    cmd: "init",
-                    data: {
-                        bitmap,
-                        upscaled,
-                        original,
-                        resolution: {
-                            width: video.videoWidth,
-                            height: video.videoHeight
+                if (!canvasesTransferred) {
+                    const upscaled = upscaled_canvas.transferControlToOffscreen();
+                    const original = original_canvas.transferControlToOffscreen();
+                    canvasesTransferred = true;
+
+                    worker.postMessage({
+                        cmd: "init",
+                        data: {
+                            bitmap,
+                            upscaled,
+                            original,
+                            resolution: {
+                                width: video.videoWidth,
+                                height: video.videoHeight
+                            }
                         }
-                    }
-                }, [bitmap, upscaled, original]);
-            } else {
-                worker.postMessage({
-                    cmd: "init",
-                    data: {
-                        bitmap,
-                        resolution: {
-                            width: video.videoWidth,
-                            height: video.videoHeight
+                    }, [bitmap, upscaled, original]);
+                } else {
+                    worker.postMessage({
+                        cmd: "init",
+                        data: {
+                            bitmap,
+                            resolution: {
+                                width: video.videoWidth,
+                                height: video.videoHeight
+                            }
                         }
-                    }
-                }, [bitmap]);
-            }
+                    }, [bitmap]);
+                }
+            });
 
             content = 'rl';
-            await updateNetwork();
             Alpine.store('style', 'rl');
             Alpine.store('state', 'preview');
         } catch (err: any) {
@@ -550,6 +562,7 @@ worker.onmessage = function (event: MessageEvent<WorkerResponseMessage>) {
  * Switch to a different upscaling network
  */
 async function updateNetwork(): Promise<void> {
+    if (!video || !video.videoWidth) return;
     const bitmap = await createImageBitmap(video);
 
     worker.postMessage({
@@ -559,7 +572,7 @@ async function updateNetwork(): Promise<void> {
             bitmap,
             weights: weights[size][content]
         }
-    } satisfies WorkerRequestMessage);
+    } satisfies WorkerRequestMessage, [bitmap]);
 }
 
 //===================  Process ===========================

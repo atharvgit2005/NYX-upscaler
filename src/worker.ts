@@ -111,6 +111,7 @@ self.onmessage = async function (event: MessageEvent<WorkerRequestMessage>) {
     switch (event.data.cmd) {
       case 'init':
         await init(event.data.data);
+        postMessage({ cmd: 'inited' } satisfies WorkerResponseMessage);
         break;
 
       case 'isSupported':
