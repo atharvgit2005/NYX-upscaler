@@ -70,12 +70,12 @@ async function init(config: InitData): Promise<void> {
     canvas: upscaled_canvas as any
   });
 
+  await websr.render(config.bitmap as any);
+
   const bitmap2 = await createImageBitmap(config.bitmap, {
     resizeHeight: config.resolution.height * 2,
     resizeWidth: config.resolution.width * 2,
   });
-
-  await websr.render(config.bitmap as any);
 
   if (ctx) {
     ctx.transferFromImageBitmap(bitmap2);
@@ -89,12 +89,12 @@ async function switchNetwork(name: string, weights: any, bitmap: ImageBitmap): P
   if (!websr) return;
   websr.switchNetwork(name as any, weights);
 
+  await websr.render(bitmap as any);
+
   const bitmap2 = await createImageBitmap(bitmap, {
     resizeHeight: resolution ? resolution.height * 2 : bitmap.height * 2,
     resizeWidth: resolution ? resolution.width * 2 : bitmap.width * 2,
   });
-
-  await websr.render(bitmap as any);
 
   if (ctx) {
     ctx.transferFromImageBitmap(bitmap2);

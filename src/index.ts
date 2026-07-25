@@ -276,7 +276,7 @@ async function setupPreview(file: File): Promise<void> {
             // Already mounted
         }
 
-        video.currentTime = (isFinite(video.duration) && video.duration > 0) ? video.duration * 0.2 : 0;
+        const targetTime = (isFinite(video.duration) && video.duration > 0) ? video.duration * 0.2 : 0;
 
         await new Promise<void>((resolve) => {
             let resolved = false;
@@ -286,19 +286,22 @@ async function setupPreview(file: File): Promise<void> {
                     resolve();
                 }
             };
-            if (video.seeking) {
-                video.onseeked = done;
-            } else {
-                setTimeout(done, 150);
-            }
+            video.onseeked = done;
+            video.currentTime = targetTime;
+            setTimeout(done, 800);
         });
 
-        const triggerPreview = () => {
-            if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(() => showPreview());
-            else requestAnimationFrame(() => showPreview());
-        };
+        if ('requestVideoFrameCallback' in video) {
+            await new Promise<void>((resolve) => {
+                (video as any).requestVideoFrameCallback(() => resolve());
+            });
+        } else {
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => resolve());
+            });
+        }
 
-        triggerPreview();
+        await showPreview();
 
         window.togglePause = function () {
             const currentState = Alpine.store('state');
@@ -325,7 +328,7 @@ async function setupPreview(file: File): Promise<void> {
             window.initRecording = initRecording;
             window.fullScreenPreview = fullScreenPreview;
 
-            const bitmap = await createImageBitmap(video);
+            const bitmap = await createImageBitmap(video, 0, 0, video.videoWidth, video.videoHeight);
 
             await new Promise<void>((resolve, reject) => {
                 const handler = (e: MessageEvent<WorkerResponseMessage>) => {
