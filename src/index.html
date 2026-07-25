@@ -165,7 +165,11 @@ I built it because from previous experience as a casual user who just wants to u
 
 
     <div id="info"  class="" x-show="$store.state === 'processing' || $store.state === 'paused'">
-        <p class="text-center mx-auto my-2">Upscaling <span x-text="$store.filename" class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-auto text-center"></span> .Estimated time left: <span x-text="$store.eta"></span></p>
+        <p class="text-center mx-auto my-2">Upscaling <span x-text="$store.filename" class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-auto text-center"></span>. Estimated time left: <span x-text="$store.eta" class="font-semibold text-blue-900"></span></p>
+
+        <p class="text-center mx-auto my-1 font-bold text-blue-900">
+            Progress: <span x-text="Math.round($store.progress || 0) + '%'"></span>
+        </p>
 
         <p class="text-center mx-auto my-2 text-yellow-600 font-bold" x-show="$store.state === 'paused'">
             ⏸ Processing Paused

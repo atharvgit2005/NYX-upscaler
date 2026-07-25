@@ -39,3 +39,34 @@ video {
     width: 100%;
     display: flex;
 }
+
+/* Progress Bar Styling */
+.progress {
+    width: 100%;
+    height: 1.25rem;
+    background-color: #e5e7eb;
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #1e3a8a;
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+    transition: width 0.3s ease;
+    border-radius: 9999px;
+    animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+    from { background-position: 1rem 0; }
+    to { background-position: 0 0; }
+}
+
+.bg-warning {
+    background-color: #d97706 !important;
+}

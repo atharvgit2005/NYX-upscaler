@@ -304,15 +304,11 @@ async function setupPreview(file: File): Promise<void> {
             setTimeout(done, 800);
         });
 
-        if ('requestVideoFrameCallback' in video) {
-            await new Promise<void>((resolve) => {
-                (video as any).requestVideoFrameCallback(() => resolve());
-            });
-        } else {
-            await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
                 requestAnimationFrame(() => resolve());
             });
-        }
+        });
 
         await showPreview();
 
