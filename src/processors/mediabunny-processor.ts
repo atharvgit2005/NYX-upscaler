@@ -160,7 +160,7 @@ export default async function mediabunnyProcessor(args: ProcessorArgs): Promise<
     });
 
     //@ts-expect-error
-    websr.render(videoFrame); // Render the upscaled frame
+    await websr.render(videoFrame); // Render the upscaled frame
 
     // Render the "Before"
     if (ctx) {

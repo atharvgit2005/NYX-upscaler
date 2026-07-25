@@ -135,7 +135,7 @@ self.onmessage = async function (event: MessageEvent<WorkerRequestMessage>) {
         break;
 
       case 'process':
-        await pipelineProcessor({
+        await mediabunnyProcessor({
           inputHandle: event.data.inputHandle,
           outputHandle: event.data.outputHandle,
           websr,
