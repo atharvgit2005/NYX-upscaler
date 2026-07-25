@@ -10,7 +10,7 @@ import type {
 
 // Processors
 import pipelineProcessor from './processors/pipeline-processor';
- import mediabunnyProcessor from './processors/mediabunny-processor'; // Fallback if needed
+import mediabunnyProcessor from './processors/mediabunny-processor'; // Fallback if needed
 
 // Worker state
 let gpu: any | false;
@@ -51,6 +51,17 @@ async function init(config: InitData): Promise<void> {
     ctx = original_canvas.getContext('bitmaprenderer');
   }
 
+  resolution = config.resolution;
+
+  if (upscaled_canvas) {
+    upscaled_canvas.width = resolution.width * 2;
+    upscaled_canvas.height = resolution.height * 2;
+  }
+  if (original_canvas) {
+    original_canvas.width = resolution.width * 2;
+    original_canvas.height = resolution.height * 2;
+  }
+
   websr = new WebSR({
     network_name: "anime4k/cnn-2x-m",
     weights,
@@ -58,8 +69,6 @@ async function init(config: InitData): Promise<void> {
     gpu: gpu,
     canvas: upscaled_canvas as any
   });
-
-  resolution = config.resolution;
 
   const bitmap2 = await createImageBitmap(config.bitmap, {
     resizeHeight: config.resolution.height * 2,
@@ -77,17 +86,20 @@ async function init(config: InitData): Promise<void> {
  * Switch to a different AI upscaling network
  */
 async function switchNetwork(name: string, weights: any, bitmap: ImageBitmap): Promise<void> {
+  if (!websr) return;
   websr.switchNetwork(name as any, weights);
 
+  const bitmap2 = await createImageBitmap(bitmap, {
+    resizeHeight: resolution ? resolution.height * 2 : bitmap.height * 2,
+    resizeWidth: resolution ? resolution.width * 2 : bitmap.width * 2,
+  });
+
   await websr.render(bitmap as any);
+
+  if (ctx) {
+    ctx.transferFromImageBitmap(bitmap2);
+  }
 }
-
-
-
-
-
-
-// Processing functions moved to processors/
 
 /**
  * Worker message handler with type-safe message routing
@@ -120,7 +132,7 @@ self.onmessage = async function (event: MessageEvent<WorkerRequestMessage>) {
           postMessage({ cmd: 'resumed' } satisfies WorkerResponseMessage);
         }
         break;
-      
+
       case 'process':
         await pipelineProcessor({
           inputHandle: event.data.inputHandle,

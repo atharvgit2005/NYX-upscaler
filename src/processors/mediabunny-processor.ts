@@ -27,15 +27,16 @@ interface ProcessorArgs {
 }
 
 function prettyTime(secs: number): string {
-  const sec_num = parseInt(secs.toString(), 10);
+  if (!isFinite(secs) || secs < 0 || isNaN(secs)) return 'calculating...';
+  const sec_num = Math.floor(secs);
   const hours = Math.floor(sec_num / 3600);
   const minutes = Math.floor(sec_num / 60) % 60;
   const seconds = sec_num % 60;
 
-  return [hours, minutes, seconds]
-    .map(v => v < 10 ? "0" + v : v)
-    .filter((v, i) => v !== "00" || i > 0)
-    .join(":");
+  if (hours > 0) {
+    return `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
 /**
@@ -118,15 +119,21 @@ export default async function mediabunnyProcessor(args: ProcessorArgs): Promise<
   const ctx = original_canvas.getContext('bitmaprenderer');
 
   function reportProgress(sample: VideoSample) {
-    const time_elapsed = performance.now() - start_time;
-    const progress = Math.floor((sample.timestamp) / duration * 100);
+    const elapsedMs = performance.now() - start_time;
+    const progress = Math.min(99, Math.max(1, Math.floor((sample.timestamp) / (duration || 1) * 100)));
 
     postMessage({ cmd: 'progress', data: progress })
 
-    if (time_elapsed > 1000) {
-      const processing_rate = ((sample.timestamp) / duration * 100) / time_elapsed;
-      const eta = Math.round(((100 - progress) / processing_rate) / 1000);
-      postMessage({ cmd: 'eta', data: prettyTime(eta) })
+    if (elapsedMs > 500 && sample.timestamp > 0) {
+      const secsElapsed = elapsedMs / 1000;
+      const rate = sample.timestamp / secsElapsed;
+      if (rate > 0) {
+        const remaining = Math.max(0, duration - sample.timestamp);
+        const eta = Math.round(remaining / rate);
+        postMessage({ cmd: 'eta', data: prettyTime(eta) });
+      } else {
+        postMessage({ cmd: 'eta', data: 'calculating...' });
+      }
     } else {
       postMessage({ cmd: 'eta', data: 'calculating...' })
     }

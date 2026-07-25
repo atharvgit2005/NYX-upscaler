@@ -245,15 +245,23 @@ function createVideoMuxerWriter(
 
       // Report progress on first frame and every 5 frames after
       if (frameCount % 5 === 0 || frameCount === 1) {
-        const elapsed = performance.now() - startTime;
-        const progress = Math.min(100, Math.max(0, Math.floor((value.chunk.timestamp / 1000000) / duration * 100)));
+        const elapsedMs = performance.now() - startTime;
+        const currentTimestampSec = value.chunk.timestamp / 1000000;
+        const totalDurationSec = (duration > 10000) ? (duration / 1000000) : duration;
+        const progress = Math.min(99, Math.max(1, Math.floor((currentTimestampSec / (totalDurationSec || 1)) * 100)));
 
         postMessage({ cmd: 'progress', data: progress });
 
-        if (elapsed > 500 && progress > 0) {
-          const processingRate = progress / elapsed;
-          const eta = Math.round(((100 - progress) / processingRate) / 1000);
-          postMessage({ cmd: 'eta', data: prettyTime(eta) });
+        if (elapsedMs > 500 && currentTimestampSec > 0) {
+          const secsElapsed = elapsedMs / 1000;
+          const videoSecPerRealSec = currentTimestampSec / secsElapsed;
+          if (videoSecPerRealSec > 0) {
+            const remainingVideoSec = Math.max(0, totalDurationSec - currentTimestampSec);
+            const etaSec = Math.round(remainingVideoSec / videoSecPerRealSec);
+            postMessage({ cmd: 'eta', data: prettyTime(etaSec) });
+          } else {
+            postMessage({ cmd: 'eta', data: 'calculating...' });
+          }
         } else {
           postMessage({ cmd: 'eta', data: 'calculating...' });
         }
@@ -302,15 +310,16 @@ function createAudioMuxerWriter(
  * Format seconds into HH:MM:SS
  */
 function prettyTime(secs: number): string {
-  const sec_num = parseInt(secs.toString(), 10);
+  if (!isFinite(secs) || secs < 0 || isNaN(secs)) return 'calculating...';
+  const sec_num = Math.floor(secs);
   const hours = Math.floor(sec_num / 3600);
   const minutes = Math.floor(sec_num / 60) % 60;
   const seconds = sec_num % 60;
 
-  return [hours, minutes, seconds]
-    .map(v => v < 10 ? "0" + v : v)
-    .filter((v, i) => v !== "00" || i > 0)
-    .join(":");
+  if (hours > 0) {
+    return `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
 /**
