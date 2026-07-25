@@ -202,7 +202,17 @@ async function handleFileInput(e: Event): Promise<void> {
     }
 }
 
-//===================  Preview ===========================
+/**
+ * Helper to format byte sizes into human readable units
+ */
+function formatBytes(bytes: number, decimals = 1): string {
+    if (!bytes || bytes === 0 || isNaN(bytes)) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
 /**
  * Load video file from FileSystemFileHandle or direct File object
@@ -221,6 +231,7 @@ async function loadVideo(fileOrHandle: FileSystemFileHandle | File): Promise<voi
     download_name = inputFile.name.split(".")[0] + "-upscaled.mp4";
     Alpine.store('download_name', download_name);
     Alpine.store('filename', inputFile.name);
+    Alpine.store('size', formatBytes(inputFile.size * 2.5));
 
     await setupPreview(inputFile);
 }
@@ -267,16 +278,27 @@ async function setupPreview(file: File): Promise<void> {
 
         video.currentTime = (isFinite(video.duration) && video.duration > 0) ? video.duration * 0.2 : 0;
 
+        await new Promise<void>((resolve) => {
+            let resolved = false;
+            const done = () => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve();
+                }
+            };
+            if (video.seeking) {
+                video.onseeked = done;
+            } else {
+                setTimeout(done, 150);
+            }
+        });
+
         const triggerPreview = () => {
-            if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(showPreview);
-            else requestAnimationFrame(showPreview);
+            if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(() => showPreview());
+            else requestAnimationFrame(() => showPreview());
         };
 
-        if (video.seeking) {
-            video.onseeked = triggerPreview;
-        } else {
-            triggerPreview();
-        }
+        triggerPreview();
 
         window.togglePause = function () {
             const currentState = Alpine.store('state');
