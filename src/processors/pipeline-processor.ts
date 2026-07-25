@@ -389,8 +389,16 @@ export default async function pipelineProcessor(args: ProcessorArgs): Promise<vo
   // Configure encoder with hardware acceleration
   const bitrate = 2.5e6 * (width * height * 4) / (1280 * 720);
 
+  // Select H.264 level profile dynamically based on target resolution
+  // Level 5.2 (avc1.4d0034) supports up to 4K (4096x2304)
+  // Level 6.0 (avc1.64003c) supports up to 8K (8192x4320)
+  let codec = 'avc1.4d0034';
+  if (width * 2 > 4096 || height * 2 > 2304) {
+    codec = 'avc1.64003c';
+  }
+
   const videoEncoderConfig: VideoEncoderConfig = {
-    codec: 'avc1.4d0034',
+    codec,
     width: width * 2,
     height: height * 2,
     bitrate: Math.round(bitrate),
