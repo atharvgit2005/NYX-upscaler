@@ -121,11 +121,16 @@ async function index(): Promise<void> {
 
     if ((window as any).electronAPI && typeof (window as any).electronAPI.getAutoInput === 'function') {
         (window as any).electronAPI.getAutoInput().then(async (autoPath: string | null) => {
+            console.log('[DIAGNOSTIC] Auto input path:', autoPath);
             if (autoPath) {
+                console.log('[DIAGNOSTIC] Reading local file from path...');
                 const res = await (window as any).electronAPI.readLocalFile(autoPath);
+                console.log('[DIAGNOSTIC] Read result:', res ? res.name : 'NULL');
                 if (res && res.buffer) {
                     const file = new File([res.buffer], res.name, { type: 'video/mp4' });
+                    console.log('[DIAGNOSTIC] File object created, loading video...');
                     await loadVideo(file);
+                    console.log('[DIAGNOSTIC] Video loaded. Triggering initRecording in 1.5s...');
                     setTimeout(() => initRecording(), 1500);
                 }
             }
@@ -613,10 +618,12 @@ async function initRecording(): Promise<void> {
     // Max Blob size - 10 MB (for testing, should be much higher in production)
     if (estimated_size > MAX_FILE_BLOB_SIZE) {
         try {
-            outputHandle = await showFilePicker();
+            if (typeof window.showSaveFilePicker === 'function') {
+                outputHandle = await showFilePicker();
+            }
         } catch (e) {
-            console.warn("User aborted request");
-            return Alpine.store('state', 'preview');
+            console.warn("Save file picker skipped or unsupported, processing as Blob:", e);
+            outputHandle = undefined;
         }
     }
 
