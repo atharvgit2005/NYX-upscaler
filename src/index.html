@@ -1,24 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 
 <head>
     <meta charset="UTF-8">
-    <meta
-            content="A free web tool for AI upscaling videos right in the browser, no signup or software installation required. It's free, open source and works out of the box"
-            name="description">
-    <meta content="Free AI Video Upscaler" property="og:title">
-    <meta
-            content="A free web tool for AI upscaling videos right in the browser, no signup or software installation required. It's free, open source and works out of the box"
-            property="og:description">
-    <meta content="https://free.upscaler.video/hero-screenshot-anime4k-small.png" property="og:image">
-    <meta content="Free AI Video Upscaler" property="twitter:title">
-    <meta
-            content="A free web tool for AI upscaling videos right in the browser, no signup or software installation required. It's free, open source and works out of the box"
-            property="twitter:description">
-    <meta content="https://free.upscaler.video/hero-screenshot-anime4k-small.png" property="twitter:image">
-    <meta property="og:type" content="website">
-    <meta content="summary_large_image" name="twitter:card">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="NYX AI Video Upscaler - High Performance Local WebGPU Accelerated Upscaler">
+    <title>NYX AI Video Upscaler (RTX Accelerated)</title>
     <style>
         @font-face {
             font-family: 'Manrope';
@@ -29,214 +16,216 @@
             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
         }
     </style>
-    <title>NYX AI Video Upscaler (GPU Accelerated)</title>
-
-
 </head>
 
+<body x-data="{}" style="display: none;" class="font-manrope bg-slate-950 text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white">
 
+    <!-- Ambient Background Glows -->
+    <div class="fixed top-0 left-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none -z-10"></div>
+    <div class="fixed bottom-0 right-1/4 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-3xl pointer-events-none -z-10"></div>
 
-<body x-data="{}" style="display: none;" class="font-manrope">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
 
+        <!-- App Header -->
+        <header class="text-center mb-8">
+            <div class="inline-flex items-center justify-center gap-3 mb-2">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-cyan-500/20">
+                    N
+                </div>
+                <h1 class="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                    NYX AI Video Upscaler
+                </h1>
+            </div>
+            <p class="text-slate-400 text-sm font-medium">
+                Hardware Accelerated WebGPU Super-Resolution Engine
+            </p>
+        </header>
 
-<h1 id="title" x-show="$store.state === 'init' || $store.state === 'unsupported'" class="w-full text-center  my-16 font-extrabold text-6xl text-blue-900">NYX AI Video Upscaler</h1>
-<p id="hero-text" x-show="$store.state === 'init' || $store.state === 'unsupported'" class="text-gray-900 text-xl my-4 mx-auto w-[700px] text-center">Upscale videos or images with AI for free, right in your browser - no signups, installation or config necessary. It is fast, free and open source.
-
-
-
-<span x-show="$store.state === 'info'" class="w-[640px] mx-auto block text-center mb-5">
-    This is a quick, free no-nonsense tool for upscaling videos with AI right in the browser. There is no software to install, and no registration or sign up required. All you need to do is input a video, and your browser will do all of the AI Upscaling and video processing. This software tool is completely free and open source, and works particularly well for animated content.
-I built it because from previous experience as a casual user who just wants to upscale a few videos you have around, it's surprisingly frustrating. There are paid tools like <a href="https://www.topazlabs.com/">Topaz Labs </a>  which are excellent but also overkill for non-professional work, or open source projects like <a href="https://github.com/k4yt3x/video2x"> Video2X </a>  which require a lot of setup and configuration. This tool, in contrast, is designed to be quick, fast, free, simple and easy to use. It is based on my <a href="https://github.com/sb2702/websr">WebSR</a> project, which is an open-source WebSDK for applying real-time super resolution to videos on the web. It works by porting several open source AI Upscaling algorithms like <a href="https://github.com/bloc97/Anime4K"> Anime4K</a> and <a href="https://github.com/xinntao/Real-ESRGAN">RealESRGAN</a> into WebGPU. The WebSR SDK then allows you to easily apply these AI Upscaling (Super resolution) algorithms to each frame of a video directly in the browser.
-</span>
-</p>
-
-<div  x-show="!($store.state === 'init' || $store.state === 'unsupported')">
-    <br>
-    <br>
-</div>
-
-<div id="unsupported-panel" class="w-[640px] mx-auto bg-gray-light rounded-3xl h-fit p-6 box-border border border-gray-border flex justify-center items-center"   x-show="$store.state === 'unsupported'">
-    <p class="w-full text-2xl text-center my-5 mx-auto">Your browser does not support <span id="missing-component" x-text="$store.component" class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-1 text-xl"></span>, a required browser feature for this tool.  <br> <br> Try using the latest version of <img  alt="You can use the latest Chrome browser" src="chrome.svg" style="display: inline;" width="25" height="25"> Chrome or <img alt="You can use the latest Edge browser"  src="edge.svg" style="display: inline;" width="25" height="25"> Edge on a 💻 Laptop or 🖥️ Desktop.
-    </p>
-</div>
-
-
-<div class="w-[640px] mx-auto" x-show="$store.state === 'unsupported'" >
-
-    <p class="w-full text-xl text-center my-8 mx-auto"> For what it's worth, here's how it's supposed to work <a href="https://www.youtube.com/watch?v=hhweJlZsDFE" target="_blank">[YouTube link]</a></p>
-</div>
-
-
-
-
-<div id="loading-panel" class="w-[640px] mx-auto bg-gray-light rounded-3xl h-[680px] p-6 box-border border border-gray-border flex justify-center items-center"   x-show="$store.state === 'loading'">
-
-    <img src="loading.svg" alt="Loading" class="w-64 h-64 mx-auto block relative">
-</div>
-
-<div id="error-panel" class="w-[640px] mx-auto bg-gray-light rounded-3xl h-[680px] p-6 box-border border border-gray-border flex justify-center items-center"   x-show="$store.state === 'error'">
-    <p class="w-full text-2xl text-center my-5 mx-auto">An error ocurred while processing the video: <span class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-1" x-text="$store.error"></span></p>
-</div>
-
-<div id="file-load-panel" class="w-[640px] mx-auto bg-gray-light rounded-3xl h-[360px] p-8 box-border border-2 border-dashed border-gray-300 flex flex-col justify-center items-center cursor-pointer transition-all hover:border-blue-600 hover:bg-blue-50/50" x-show="$store.state === 'init'" onclick="chooseFile(this)">
-    <div class="w-16 h-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-900 shadow-sm">
-        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-    </div>
-    <p class="text-2xl font-bold text-gray-800 mb-2">Drag & Drop your video file here</p>
-    <p class="text-gray-500 text-sm mb-6">or click to browse local files (MP4, MKV, MOV, AVI, WEBM, M4V)</p>
-    <button type="button" class="btn btn-primary py-3 px-6 rounded-xl font-bold bg-blue-900 text-white shadow-md hover:bg-blue-800 transition-all flex items-center gap-2" id="input-button" onclick="event.stopPropagation(); chooseFile(this);">
-        <span>Choose a video file</span>
-    </button>
-    <input type="file" id="file-input" accept="video/*" class="hidden" style="display: none;" onchange="handleFileInput(event)">
-</div>
-
-
-
-<div id="start-panel" class="w-[640px] mx-auto bg-gray-light rounded-3xl h-[680px] p-6 box-border border border-gray-border" x-show="$store.state === 'preview' || $store.state === 'processing' || $store.state === 'complete' || $store.state === 'paused'">
-
-    <div id="image-compare-outer">
-        <div id="image-compare" >
-       
-            <canvas id="original"></canvas>
-            <canvas id="upscaled" ></canvas>
-        </div>
- 
-
-
-    </div>
-
-    <img src="full-screen.svg" alt="Full Screen"  width="15" height="15" id="full-screen" onclick="fullScreenPreview()" x-show="$store.state === 'preview'" class="absolute z-10 cursor-pointer">
-
-
-    <br>
-
-    <div id="preview"  x-show="$store.state === 'preview'">
-
-   
-        <p class="w-full mb-2 text-center  ">Upscaling <span x-text="$store.filename" class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-1"></span>  to  <span class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-1"><span x-text="$store.width*2" ></span>x<span x-text="$store.height*2"></span></span>. Output: ~ <span class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-1" x-text="$store.size"></span></p>
-
-        <div id="settings" class="mt-3 mb-3 w-full h-fit rounded-2xl text-base bg-gray-light border border-gray-border p-4">
-
-            <table class="w-full">
-                <tr class="hidden">
-                    <th class="w-1/2">Settings</th>
-                    <th></th>
-                </tr>
-                <tr title="Small is faster, Large is slower but has the most quality improvement" class="h-15">
-                    <td class="w-2/5">
-                        Upscaling Network
-                    </td>
-                    <td class="float-right py-2">
-                        <input type="radio" class="btn-check" name="options" id="option1"  value="small"  onclick="switchNetworkSize(this);" autocomplete="off">
-                        <label class="btn btn-outline-primary" for="option1">Small
-                        </label>
-
-                        &nbsp;
-                        <input type="radio" class="btn-check" name="options" id="option2" value="medium" onclick="switchNetworkSize(this);" autocomplete="off" checked>
-                        <label class="btn btn-outline-primary" for="option2">Medium
-                        </label>
-       &nbsp;
-                        <input type="radio" class="btn-check" name="options" id="option3" value="large" onclick="switchNetworkSize(this);" autocomplete="off">
-                        <label class="btn btn-outline-primary" for="option3">Large
-                        </label>
-       &nbsp;
-                        <input type="radio" class="btn-check" name="options" id="option4" value="ultra" onclick="switchNetworkSize(this);" autocomplete="off">
-                        <label class="btn btn-outline-primary" for="option4">Ultra (v2)
-                        </label>
-                    </td>
-                </tr>
-
-            </table>
-
+        <!-- Unsupported Browser Alert -->
+        <div id="unsupported-panel" class="glass-card p-8 rounded-3xl text-center mb-8 border border-red-500/30 bg-red-950/20" x-show="$store.app.state === 'unsupported'">
+            <div class="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+                ⚠️
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-2">WebGPU Acceleration Required</h2>
+            <p class="text-slate-300 max-w-md mx-auto leading-relaxed">
+                Your browser environment does not support <span class="font-mono bg-red-900/40 text-red-300 px-2 py-1 rounded text-sm" x-text="$store.app.error"></span>.
+                Please ensure you are running Electron with WebGPU enabled.
+            </p>
         </div>
 
-
-        <button  type="button" class="btn btn-primary relative mx-auto w-fit block flex flex-row"  onclick="initRecording()" x-show="$store.target === 'writer'">Choose output location &nbsp
-            <img src="folder.svg" alt="Choose a location to save the file to"  width="10" height="10">
-        </button>
-
-        <button  type="button" class="btn btn-primary relative mx-auto w-fit block flex flex-row"  onclick="initRecording()"  x-show="$store.target === 'blob'">Start upscaling &nbsp
-            <img src="play.svg" alt="Start upscaling your video"  width="10" height="10">
-        </button>
-    </div>
-
-
-
-
-
-    <div id="info"  class="" x-show="$store.state === 'processing' || $store.state === 'paused'">
-        <p class="text-center mx-auto my-2">Upscaling <span x-text="$store.filename" class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-auto text-center"></span>. Estimated time left: <span x-text="$store.eta" class="font-semibold text-blue-900"></span></p>
-
-        <p class="text-center mx-auto my-1 font-bold text-blue-900">
-            Progress: <span x-text="Math.round($store.progress || 0) + '%'"></span>
-        </p>
-
-        <p class="text-center mx-auto my-2 text-yellow-600 font-bold" x-show="$store.state === 'paused'">
-            ⏸ Processing Paused
-        </p>
-
-        <div class="progress" id="progress">
-            <div  class="progress-bar progress-bar-striped progress-bar-animated" 
-                  x-bind:class="{ 'bg-warning': $store.state === 'paused' }"
-                  role="progressbar"  
-                  x-bind:style="{width: $store.progress + '%'}" 
-                  x-bind:aria-valuenow="$store.progress" 
-                  aria-valuemin="0" 
-                  aria-valuemax="100" 
-                  style="width: 75%"></div>
+        <!-- Initial File Dropzone -->
+        <div id="file-load-panel" 
+             class="glass-card p-12 rounded-3xl border-2 border-dashed border-slate-700/80 hover:border-cyan-500/80 transition-all duration-300 cursor-pointer text-center group bg-slate-900/60 hover:bg-slate-900/80" 
+             x-show="$store.app.state === 'init'" 
+             onclick="chooseFile(this)">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-cyan-500/20 border border-cyan-500/30 group-hover:scale-110 group-hover:border-cyan-400/60 transition-all duration-300 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-cyan-500/10">
+                <svg class="w-10 h-10 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">Select or Drop Source Video</h3>
+            <p class="text-slate-400 text-sm mb-8 max-w-sm mx-auto">
+                Supports MP4, MKV, MOV, AVI, and WebM high-resolution video assets.
+            </p>
+            <button type="button" class="btn-glow px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 shadow-lg shadow-cyan-500/25 transition-all inline-flex items-center gap-2" onclick="event.stopPropagation(); chooseFile(this);">
+                <span>Browse Files</span>
+            </button>
+            <input type="file" id="file-input" accept="video/*" class="hidden" style="display: none;" onchange="handleFileInput(event)">
         </div>
 
-        <div class="flex flex-row justify-center mt-4">
-            <button type="button" 
-                    class="btn btn-outline-primary" 
-                    onclick="togglePause()" 
-                    x-text="$store.state === 'paused' ? 'Resume Upscaling' : 'Pause Upscaling'">
+        <!-- Loading State Spinner -->
+        <div id="loading-panel" class="glass-card p-16 rounded-3xl text-center" x-show="$store.app.state === 'loading'">
+            <div class="relative w-20 h-20 mx-auto mb-6">
+                <div class="absolute inset-0 rounded-full border-4 border-slate-800"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-cyan-400 border-t-transparent animate-spin"></div>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Preparing Video Engine</h3>
+            <p class="text-slate-400 text-sm">Decoding frames & initializing WebGPU neural shaders...</p>
+        </div>
+
+        <!-- Error State Panel -->
+        <div id="error-panel" class="glass-card p-10 rounded-3xl text-center border border-red-500/40 bg-red-950/20" x-show="$store.app.state === 'error'">
+            <div class="w-14 h-14 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+                ✕
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Processing Error</h3>
+            <p class="text-red-300 font-mono text-sm bg-red-900/40 p-4 rounded-xl border border-red-500/20 max-w-lg mx-auto" x-text="$store.app.error"></p>
+            <button type="button" class="mt-6 px-6 py-2.5 rounded-xl font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors" onclick="location.reload()">
+                Try Again
             </button>
         </div>
-    </div>
 
+        <!-- Main Preview & Processing Workspace -->
+        <div id="start-panel" class="glass-card rounded-3xl overflow-hidden p-6" x-show="$store.app.state === 'preview' || $store.app.state === 'processing' || $store.app.state === 'complete' || $store.app.state === 'paused'">
 
-    <p x-show="$store.state === 'complete'" class="text-center my-3">If you like the tool, please consider giving a github star <br/> on <a href="https://github.com/sb2702/free-ai-video-upscaler" class="text-primary" target="_blank">this Github Repo</a>,  it helps more people discover Free AI Video Upscaler</p>
+            <!-- Split / Comparison Viewer Canvas -->
+            <div id="image-compare-outer" class="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 mb-6 aspect-video">
+                <div id="image-compare" class="w-full h-full">
+                    <canvas id="original"></canvas>
+                    <canvas id="upscaled"></canvas>
+                </div>
+            </div>
 
-    <div id="download-link" class="flex flex-col"  x-show="$store.state === 'complete'">
+            <!-- Pre-Upscale Control Bar -->
+            <div id="preview" x-show="$store.app.state === 'preview'">
+                <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/80 border border-slate-800 mb-6">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Target Resolution</p>
+                        <p class="text-lg font-bold text-white font-mono">
+                            <span x-text="$store.app.width"></span>x<span x-text="$store.app.height"></span> 
+                            <span class="text-cyan-400 font-bold mx-1">➔ 2x AI</span> 
+                            <span class="text-cyan-300 font-bold" x-text="($store.app.width * 2) + 'x' + ($store.app.height * 2)"></span>
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Source File</p>
+                        <p class="text-sm font-semibold text-slate-200 truncate max-w-xs font-mono" x-text="$store.app.filename"></p>
+                    </div>
+                </div>
 
+                <!-- Model Selector -->
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                        AI Neural Network Model
+                    </label>
+                    <div class="grid grid-cols-4 gap-3">
+                        <button type="button" 
+                                class="p-3 rounded-xl border text-sm font-bold transition-all text-center"
+                                :class="$store.app.network === 'small' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'"
+                                onclick="switchModel('small')">
+                            Small (Fast)
+                        </button>
+                        <button type="button" 
+                                class="p-3 rounded-xl border text-sm font-bold transition-all text-center"
+                                :class="$store.app.network === 'medium' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'"
+                                onclick="switchModel('medium')">
+                            Medium (Balanced)
+                        </button>
+                        <button type="button" 
+                                class="p-3 rounded-xl border text-sm font-bold transition-all text-center"
+                                :class="$store.app.network === 'large' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'"
+                                onclick="switchModel('large')">
+                            Large (Quality)
+                        </button>
+                        <button type="button" 
+                                class="p-3 rounded-xl border text-sm font-bold transition-all text-center"
+                                :class="$store.app.network === 'ultra' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'"
+                                onclick="switchModel('ultra')">
+                            Ultra (v2)
+                        </button>
+                    </div>
+                </div>
 
+                <!-- Action Button -->
+                <button type="button" 
+                        class="w-full py-4 rounded-2xl font-extrabold text-white text-lg bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-400 hover:from-blue-500 hover:to-cyan-400 shadow-xl shadow-cyan-500/25 transition-all flex items-center justify-center gap-3"
+                        onclick="initRecording()">
+                    <span>Start AI Upscaling ▶</span>
+                </button>
+            </div>
 
-        <div class="mx-auto my-2" x-show="$store.target=='writer'">Saved result to <span x-text="$store.download_name" class="font-mono bg-gray-200 rounded-lg py-1 px-2 mx-1"></span></div>
-        
-        
-        <div class="flex flex-row">
-            <button  type="button" class="btn btn-outline-primary flex flex-row mx-auto"  onclick="location.reload();">Upscale another
-                <img src="refresh.svg" alt="Upscale another video"  width="20" height="20">
-            </button>
-    
-            <a  x-bind:href="$store.download_url"  x-bind:download="$store.download_name"  x-show="$store.target=='blob'" class="mx-auto"><button  type="button" class="btn btn-primary flex flex-row" id="download">Download
-                <img src="download-icon.svg" width="20" height="20">
-            </button></a>
-    
+            <!-- Active Processing State Panel -->
+            <div id="info" x-show="$store.app.state === 'processing' || $store.app.state === 'paused'">
+                
+                <!-- Status Cards Grid -->
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Status</p>
+                        <p class="text-lg font-bold font-mono" :class="$store.app.state === 'paused' ? 'text-amber-400' : 'text-cyan-400'">
+                            <span x-text="$store.app.state === 'paused' ? '⏸ Paused' : '⚡ Upscaling...'"></span>
+                        </p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Overall Progress</p>
+                        <p class="text-xl font-extrabold text-white font-mono" x-text="Math.round($store.app.progress || 0) + '%'"></p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Estimated Time</p>
+                        <p class="text-lg font-bold text-cyan-300 font-mono" x-text="$store.app.eta || 'calculating...'"></p>
+                    </div>
+                </div>
+
+                <!-- Custom Glowing Animated Progress Bar -->
+                <div class="w-full bg-slate-900 rounded-2xl overflow-hidden p-1.5 border border-slate-800 mb-6 shadow-inner">
+                    <div class="h-5 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-400 to-teal-300 transition-all duration-300 relative overflow-hidden shadow-lg shadow-cyan-500/30"
+                         :style="{ width: Math.max(2, Math.min(100, $store.app.progress)) + '%' }">
+                        <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex items-center justify-center gap-4">
+                    <button type="button" 
+                            class="px-8 py-3 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white transition-all"
+                            onclick="togglePause()" 
+                            x-text="$store.app.state === 'paused' ? '▶ Resume Upscaling' : '⏸ Pause Upscaling'">
+                    </button>
+                </div>
+            </div>
+
+            <!-- Complete State Panel -->
+            <div id="download-link" x-show="$store.app.state === 'complete'" class="text-center py-4">
+                <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto mb-4 text-3xl font-bold shadow-lg shadow-emerald-500/10">
+                    ✓
+                </div>
+                <h3 class="text-2xl font-bold text-white mb-2">Upscaling Complete!</h3>
+                <p class="text-slate-400 text-sm mb-6 font-mono" x-text="'Saved as: ' + ($store.app.download_name || 'upscaled.mp4')"></p>
+
+                <div class="flex items-center justify-center gap-4">
+                    <button type="button" class="px-6 py-3 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-white transition-colors" onclick="location.reload()">
+                        Upscale Another Video
+                    </button>
+                    <a :href="$store.app.download_url" :download="$store.app.download_name" x-show="$store.app.download_url">
+                        <button type="button" class="btn-glow px-8 py-3.5 rounded-xl font-extrabold text-white bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-lg shadow-emerald-500/25 transition-all">
+                            Download Video 💾
+                        </button>
+                    </a>
+                </div>
+            </div>
+
         </div>
 
-
-
-
-
     </div>
-
-
-</div>
-
-
-<div id="footer" class="fixed left-0 bottom-0 w-full text-gray-text text-center text-sm p-5">
-    <div class="float-left">
-        Souce code <a class="text-primary" href="https://github.com/sb2702/free-ai-video-upscaler" >on Github</a>.  &nbsp;  &nbsp; © Sam Bhattacharyya 2026
-    </div>
-
-    <div class="float-right">
-        Issues, questions or suggestions, go <a class="text-primary" href="https://videoupscaler.canny.io/issues-requests"> here</a>
-    </div>
-
-</div>
 
 </body>
-
 </html>

@@ -8,7 +8,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import "./index.css";
 import "./lib/image-compare-viewer.min.css";
 
-const MAX_FILE_BLOB_SIZE=1900*1024*1024; //Just under 2GB, max ArrayBufferSize
+const MAX_FILE_BLOB_SIZE = 1900 * 1024 * 1024; // ~2GB max Blob allocation
 
 // Web Worker for video processing
 const worker = new Worker(new URL('./worker.ts', import.meta.url));
@@ -26,14 +26,14 @@ let size: NetworkSize = 'medium';
 let content: ContentType = 'rl';
 
 // Video data
-let download_name: string;
+let download_name: string = 'upscaled.mp4';
 let inputFileHandle: FileSystemFileHandle | undefined;
 let inputFile: File;
 let canvasesTransferred = false;
 let gpu: any;
 let websr: WebSR;
 
-// AI model weights for different network sizes and content types
+// AI model weights
 type WeightsMap = {
     [K in NetworkSize]: {
         [C in ContentType]: any;
@@ -63,31 +63,20 @@ const weights: WeightsMap = {
     }
 };
 
-// Network name mapping
 const networks: Record<NetworkSize, { name: string }> = {
-    'small': {
-        name: "anime4k/cnn-2x-s",
-    },
-    'medium': {
-        name: "anime4k/cnn-2x-m",
-    },
-    'large': {
-        name: "anime4k/cnn-2x-l",
-    },
-    'ultra': {
-        name: "anime4k/cnn-2x-l",
-    }
+    'small': { name: "anime4k/cnn-2x-s" },
+    'medium': { name: "anime4k/cnn-2x-m" },
+    'large': { name: "anime4k/cnn-2x-l" },
+    'ultra': { name: "anime4k/cnn-2x-l" }
 };
 
-// Declare global window functions for Alpine to call and File System Access API
+// Global Window interface
 declare global {
     interface Window {
         chooseFile: (e?: Event) => Promise<void>;
         handleFileInput: (e: Event) => Promise<void>;
         initRecording: () => Promise<void>;
-        fullScreenPreview: (e?: Event) => Promise<void>;
-        switchNetworkSize: (el: HTMLInputElement) => Promise<void>;
-        switchNetworkStyle: (el: HTMLInputElement) => Promise<void>;
+        switchModel: (modelName: NetworkSize) => Promise<void>;
         showSaveFilePicker: (options?: any) => Promise<FileSystemFileHandle>;
         showOpenFilePicker: (options?: any) => Promise<FileSystemFileHandle[]>;
         togglePause: () => void;
@@ -96,13 +85,23 @@ declare global {
 
 document.addEventListener("DOMContentLoaded", index);
 
-//===================  Initial Load ===========================
-
 /**
- * Main initialization function called on page load
+ * Main initialization function
  */
 async function index(): Promise<void> {
-    Alpine.store('state', 'init');
+    // Single Reactive Object Store for Alpine v3
+    Alpine.store('app', {
+        state: 'init',
+        progress: 0,
+        eta: 'calculating...',
+        filename: '',
+        width: 0,
+        height: 0,
+        error: '',
+        download_url: '',
+        download_name: 'upscaled.mp4',
+        network: 'medium'
+    });
 
     Alpine.start();
     document.body.style.display = "block";
@@ -110,7 +109,11 @@ async function index(): Promise<void> {
     upscaled_canvas = document.getElementById("upscaled") as HTMLCanvasElement;
     original_canvas = document.getElementById('original') as HTMLCanvasElement;
 
-    if (!("VideoEncoder" in window)) return showUnsupported("WebCodecs");
+    if (!("VideoEncoder" in window)) {
+        (Alpine.store('app') as any).state = 'unsupported';
+        (Alpine.store('app') as any).error = 'WebCodecs';
+        return;
+    }
 
     setupDragAndDrop();
 
@@ -118,19 +121,19 @@ async function index(): Promise<void> {
 
     window.chooseFile = chooseFile;
     window.handleFileInput = handleFileInput;
+    window.initRecording = initRecording;
+    window.switchModel = switchModel;
+    window.togglePause = togglePause;
 
+    // Check for Electron Auto-Input CLI
     if ((window as any).electronAPI && typeof (window as any).electronAPI.getAutoInput === 'function') {
         (window as any).electronAPI.getAutoInput().then(async (autoPath: string | null) => {
-            console.log('[DIAGNOSTIC] Auto input path:', autoPath);
+            console.log('[AUTO-INPUT]', autoPath);
             if (autoPath) {
-                console.log('[DIAGNOSTIC] Reading local file from path...');
                 const res = await (window as any).electronAPI.readLocalFile(autoPath);
-                console.log('[DIAGNOSTIC] Read result:', res ? res.name : 'NULL');
                 if (res && res.buffer) {
                     const file = new File([res.buffer], res.name, { type: 'video/mp4' });
-                    console.log('[DIAGNOSTIC] File object created, loading video...');
                     await loadVideo(file);
-                    console.log('[DIAGNOSTIC] Video loaded. Triggering initRecording in 1.5s...');
                     setTimeout(() => initRecording(), 1500);
                 }
             }
@@ -139,564 +142,236 @@ async function index(): Promise<void> {
 }
 
 /**
- * Configure global drag and drop support for video files
- */
-function setupDragAndDrop(): void {
-    const dropZone = document.getElementById('file-load-panel') || document.body;
-
-    window.addEventListener('dragover', (e: DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropZone) dropZone.classList.add('border-blue-600', 'bg-blue-50/50');
-    });
-
-    window.addEventListener('dragleave', (e: DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropZone) dropZone.classList.remove('border-blue-600', 'bg-blue-50/50');
-    });
-
-    window.addEventListener('drop', async (e: DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropZone) dropZone.classList.remove('border-blue-600', 'bg-blue-50/50');
-
-        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const droppedFile = e.dataTransfer.files[0];
-            if (droppedFile.type.startsWith('video/') || droppedFile.name.match(/\.(mp4|mkv|mov|avi|webm|m4v)$/i)) {
-                await loadVideo(droppedFile);
-            }
-        }
-    });
-}
-
-/**
- * Show unsupported browser feature message
- */
-function showUnsupported(text: string): void {
-    Alpine.store('component', text);
-    Alpine.store('state', 'unsupported');
-}
-
-/**
- * Prompt user to choose a video file using File System Access API or fallback file input
- */
-async function chooseFile(e?: Event): Promise<void> {
-    if (window.showOpenFilePicker) {
-        try {
-            const [fileHandle] = await window.showOpenFilePicker({
-                types: [{
-                    description: 'Video Files',
-                    accept: {
-                        'video/*': ['.mp4', '.mkv', '.mov', '.avi', '.webm', '.m4v']
-                    }
-                }],
-                multiple: false
-            });
-
-            await loadVideo(fileHandle);
-            return;
-        } catch (err: any) {
-            if (err.name === 'AbortError') return; // User cancelled
-            console.warn('showOpenFilePicker failed or cancelled, falling back to input:', err);
-        }
-    }
-
-    // Fallback to standard input element
-    const fileInput = document.getElementById('file-input') as HTMLInputElement;
-    if (fileInput) {
-        fileInput.value = '';
-        fileInput.click();
-    }
-}
-
-/**
- * Handle selection from standard <input type="file"> element
- */
-async function handleFileInput(e: Event): Promise<void> {
-    const input = e.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-        await loadVideo(input.files[0]);
-    }
-}
-
-/**
- * Helper to format byte sizes into human readable units
- */
-function formatBytes(bytes: number, decimals = 1): string {
-    if (!bytes || bytes === 0 || isNaN(bytes)) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-/**
- * Load video file from FileSystemFileHandle or direct File object
- */
-async function loadVideo(fileOrHandle: FileSystemFileHandle | File): Promise<void> {
-    Alpine.store('state', 'loading');
-
-    if ('getFile' in fileOrHandle && typeof (fileOrHandle as any).getFile === 'function') {
-        inputFileHandle = fileOrHandle as FileSystemFileHandle;
-        inputFile = await (fileOrHandle as FileSystemFileHandle).getFile();
-    } else {
-        inputFileHandle = undefined;
-        inputFile = fileOrHandle as File;
-    }
-
-    download_name = inputFile.name.split(".")[0] + "-upscaled.mp4";
-    Alpine.store('download_name', download_name);
-    Alpine.store('filename', inputFile.name);
-    Alpine.store('size', formatBytes(inputFile.size * 2.5));
-
-    await setupPreview(inputFile);
-}
-
-/**
- * Set up the preview UI with before/after comparison
- */
-async function setupPreview(file: File): Promise<void> {
-    video = document.createElement('video');
-    video.preload = 'auto';
-
-    video.onerror = (e) => {
-        console.error('Video load error:', e);
-        showError('Failed to load video file. Please ensure it is a supported video format.');
-    };
-
-    const imageCompare = document.getElementById('image-compare-outer') as HTMLElement;
-
-    let hasLoaded = false;
-    const onVideoReady = async function () {
-        if (hasLoaded || !video.videoWidth || !video.videoHeight) return;
-        hasLoaded = true;
-
-        Alpine.store('width', video.videoWidth);
-        Alpine.store('height', video.videoHeight);
-
-        if (!canvasesTransferred) {
-            upscaled_canvas.width = video.videoWidth * 2;
-            upscaled_canvas.height = video.videoHeight * 2;
-            original_canvas.width = video.videoWidth * 2;
-            original_canvas.height = video.videoHeight * 2;
-        }
-
-        imageCompare.style.height = '318px';
-        imageCompare.style.width = `${Math.round(video.videoWidth / video.videoHeight * 318)}px`;
-        imageCompare.style.margin = 'auto';
-        imageCompare.style.position = 'relative';
-
-        try {
-            new ImageCompare(document.getElementById('image-compare')).mount();
-        } catch (e) {
-            // Already mounted
-        }
-
-        const targetTime = (isFinite(video.duration) && video.duration > 0) ? video.duration * 0.2 : 0;
-
-        await new Promise<void>((resolve) => {
-            let resolved = false;
-            const done = () => {
-                if (!resolved) {
-                    resolved = true;
-                    resolve();
-                }
-            };
-            video.onseeked = done;
-            video.currentTime = targetTime;
-            setTimeout(done, 800);
-        });
-
-        await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => resolve());
-            });
-        });
-
-        await showPreview();
-
-        window.togglePause = function () {
-            const currentState = Alpine.store('state');
-            if (currentState === 'processing') {
-                worker.postMessage({ cmd: 'pause' } satisfies WorkerRequestMessage);
-            } else if (currentState === 'paused') {
-                worker.postMessage({ cmd: 'resume' } satisfies WorkerRequestMessage);
-            }
-        };
-    };
-
-    video.onloadeddata = onVideoReady;
-    video.onloadedmetadata = onVideoReady;
-
-    video.src = URL.createObjectURL(file);
-    video.load();
-
-    if (video.readyState >= 1) {
-        onVideoReady();
-    }
-
-    async function showPreview() {
-        try {
-            window.initRecording = initRecording;
-            window.fullScreenPreview = fullScreenPreview;
-
-            const bitmap = await createImageBitmap(video, 0, 0, video.videoWidth, video.videoHeight);
-
-            await new Promise<void>((resolve, reject) => {
-                const handler = (e: MessageEvent<WorkerResponseMessage>) => {
-                    if (e.data.cmd === 'inited') {
-                        worker.removeEventListener('message', handler);
-                        resolve();
-                    } else if (e.data.cmd === 'error') {
-                        worker.removeEventListener('message', handler);
-                        reject(new Error(e.data.data));
-                    }
-                };
-                worker.addEventListener('message', handler);
-
-                if (!canvasesTransferred) {
-                    const upscaled = upscaled_canvas.transferControlToOffscreen();
-                    const original = original_canvas.transferControlToOffscreen();
-                    canvasesTransferred = true;
-
-                    worker.postMessage({
-                        cmd: "init",
-                        data: {
-                            bitmap,
-                            upscaled,
-                            original,
-                            resolution: {
-                                width: video.videoWidth,
-                                height: video.videoHeight
-                            }
-                        }
-                    }, [bitmap, upscaled, original]);
-                } else {
-                    worker.postMessage({
-                        cmd: "init",
-                        data: {
-                            bitmap,
-                            resolution: {
-                                width: video.videoWidth,
-                                height: video.videoHeight
-                            }
-                        }
-                    }, [bitmap]);
-                }
-            });
-
-            content = 'rl';
-            Alpine.store('style', 'rl');
-            Alpine.store('state', 'preview');
-        } catch (err: any) {
-            console.error('showPreview error:', err);
-            showError('Failed to generate video preview: ' + (err?.message || err));
-        }
-    }
-
-
-
-
-
-
-
-
-
-        function setFullScreenLocation(){
-            const fullScreenButton = document.getElementById('full-screen');
-            if (!fullScreenButton) return;
-            const containerWidth = Math.round(video.videoWidth/video.videoHeight*318);
-            const containerHeight = 318;
-            
-            // Position at bottom-right of the preview container (with small padding)
-            fullScreenButton.style.left = `${imageCompare.offsetLeft + containerWidth - 20}px`;
-            fullScreenButton.style.top = `${imageCompare.offsetTop + containerHeight - 20}px`;
-        }
-
-        setTimeout(setFullScreenLocation, 20);
-        setTimeout(setFullScreenLocation, 60);
-        setTimeout(setFullScreenLocation, 200);
-
-
-
-
-
-        imageCompare.addEventListener('fullscreenchange', function () {
-            if(!document.fullscreenElement){
-                // Reset canvas styles
-                upscaled_canvas.style.width = ``;
-                upscaled_canvas.style.height = ``;
-                original_canvas.style.width = ``;
-                original_canvas.style.height = ``;
-                
-                // Reset container styles to original preview dimensions
-                const imageCompareOuter = document.getElementById('image-compare-outer');
-                const imageCompareInner = document.getElementById('image-compare');
-                
-                // Reset outer container
-                imageCompareOuter.style.width = ``;
-                imageCompareOuter.style.height = ``;
-                imageCompareOuter.style.backgroundColor = ``;
-                imageCompareOuter.style.display = ``;
-                imageCompareOuter.style.justifyContent = ``;
-                imageCompareOuter.style.alignItems = ``;
-                
-                // Reset inner container to original preview size
-                imageCompareInner.style.height = '318px';
-                imageCompareInner.style.width = `${Math.round(video.videoWidth/video.videoHeight*318)}px`;
-                imageCompareInner.style.margin = 'auto';
-                imageCompareInner.style.position = 'relative';
-            }
-        });
-
-        let bitrate = getBitrate();
-
-        const estimated_size = (bitrate/8)*video.duration + (128/8)*video.duration; // Assume 128 kbps audio
-
-        if(estimated_size > MAX_FILE_BLOB_SIZE){
-            Alpine.store('target', 'writer');
-        } else {
-            Alpine.store('target', 'blob');
-            const estimate = await navigator.storage.estimate();
-            if (estimate.quota && estimated_size > estimate.quota) {
-                Alpine.store('target', 'writer');
-            }
-        }
-
-        Alpine.store('size', humanFileSize(estimated_size));
-
-
-        function canvasFullScreen(){
-            // Calculate aspect ratios
-            const videoAspectRatio = video.videoWidth / video.videoHeight;
-            const screenAspectRatio = window.innerWidth / window.innerHeight;
-            
-            let displayWidth, displayHeight;
-
-            const imageCompareOuter = document.getElementById('image-compare-outer');
-            const imageCompareInner = document.getElementById('image-compare');
-            
-            // If video is wider than screen, fit to width (letterbox on top/bottom)
-            if (videoAspectRatio > screenAspectRatio) {
-                displayWidth = window.innerWidth;
-                displayHeight = window.innerWidth / videoAspectRatio;
-            } 
-            // If video is taller than screen, fit to height (pillarbox on sides)
-            else {
-                displayWidth = window.innerHeight * videoAspectRatio;
-                displayHeight = window.innerHeight;
-            }
-            
-            // Style the outer container to fill screen with black background and center content
-            imageCompareOuter.style.width = `${window.innerWidth}px`;
-            imageCompareOuter.style.height = `${window.innerHeight}px`;
-            imageCompareOuter.style.backgroundColor = 'black';
-            imageCompareOuter.style.display = 'flex';
-            imageCompareOuter.style.justifyContent = 'center';
-            imageCompareOuter.style.alignItems = 'center';
-            
-
-            console.log("Image Compare Outer", imageCompareOuter);
-            console.log("Image Compare Inner", imageCompareInner);
-            // Size the inner container to maintain aspect ratio
-            imageCompareInner.style.width = `${displayWidth}px`;
-            imageCompareInner.style.height = `${displayHeight}px`;
-            
-            // Let the canvases fill their parent container
-            upscaled_canvas.style.width = `${displayWidth}px`;
-            upscaled_canvas.style.height = `${displayHeight}px`;
-            original_canvas.style.width = `${displayWidth}px`;
-            original_canvas.style.height = `${displayHeight}px`;
-        }
-
-        async function fullScreenPreview(e?: Event) {
-            imageCompare.requestFullscreen();
-            setTimeout(canvasFullScreen, 20);
-            setTimeout(canvasFullScreen, 60);
-            setTimeout(canvasFullScreen, 200);
-        }
-
-        Alpine.store('state', 'preview');
-
-        window.switchNetworkSize = async function(el: HTMLInputElement){
-            if(el.value !== size){
-                size = el.value as NetworkSize;
-
-                await updateNetwork();
-            }
-        }
-
-        window.switchNetworkStyle = async function(el: HTMLInputElement){
-            if(el.value !== content){
-                content = el.value as ContentType;
-
-                await updateNetwork();
-            }
-        }
-    }
-
-
-/**
- * Handle messages from the video processing worker
+ * Handle worker message responses
  */
 worker.onmessage = function (event: MessageEvent<WorkerResponseMessage>) {
+    const app = Alpine.store('app') as any;
+
     if (event.data.cmd === 'isSupported') {
-        const supported = event.data.data;
-
-        if (!supported) return showUnsupported("WebGPU");
-
-    } else if (event.data.cmd === 'progress') {
-        Alpine.store('progress', event.data.data);
-        if (Alpine.store('state') !== 'paused') {
-            Alpine.store('state', 'processing');
+        if (!event.data.data) {
+            app.state = 'unsupported';
+            app.error = 'WebGPU';
         }
-
-    } else if (event.data.cmd === 'process') {
-        // Processing started
-
-    } else if (event.data.cmd === 'error') {
-        showError(event.data.data);
-
+    } else if (event.data.cmd === 'progress') {
+        app.progress = Math.round(event.data.data);
+        if (app.state !== 'paused' && app.state !== 'complete') {
+            app.state = 'processing';
+        }
     } else if (event.data.cmd === 'eta') {
-        Alpine.store('eta', event.data.data);
-
+        app.eta = event.data.data;
     } else if (event.data.cmd === 'finished') {
-        Alpine.store('state', 'complete');
+        app.state = 'complete';
+        app.progress = 100;
         const blob = event.data.data;
         if (blob) {
-            Alpine.store('download_url', window.URL.createObjectURL(blob));
+            app.download_url = window.URL.createObjectURL(blob);
             if ((window as any).electronAPI && typeof (window as any).electronAPI.saveFile === 'function') {
-                blob.arrayBuffer().then(buf => {
-                    const name = Alpine.store('download_name') || 'upscaled.mp4';
+                blob.arrayBuffer().then((buf: ArrayBuffer) => {
+                    const name = app.download_name || 'upscaled.mp4';
                     const savePath = 'C:\\Users\\Atharv Paharia\\OneDrive\\Desktop\\upscaler\\' + name;
                     (window as any).electronAPI.saveFile(savePath, buf);
                 });
             }
         }
-    }
-    else if (event.data.cmd === 'paused') {
-        Alpine.store('state', 'paused');
+    } else if (event.data.cmd === 'error') {
+        app.state = 'error';
+        app.error = event.data.data;
+    } else if (event.data.cmd === 'paused') {
+        app.state = 'paused';
     } else if (event.data.cmd === 'resumed') {
-        Alpine.store('state', 'processing');
+        app.state = 'processing';
     }
 };
 
-
-
 /**
- * Switch to a different upscaling network
+ * Drag and Drop setup
  */
-async function updateNetwork(): Promise<void> {
-    if (!video || !video.videoWidth) return;
-    const bitmap = await createImageBitmap(video);
+function setupDragAndDrop(): void {
+    const dropzone = document.body;
 
-    worker.postMessage({
-        cmd: 'network',
-        data: {
-            name: networks[size].name,
-            bitmap,
-            weights: weights[size][content]
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            loadVideo(e.dataTransfer.files[0]);
         }
-    } satisfies WorkerRequestMessage, [bitmap]);
+    });
 }
 
-//===================  Process ===========================
+/**
+ * File selection handlers
+ */
+async function chooseFile(e?: Event): Promise<void> {
+    if (e) e.stopPropagation();
+    try {
+        if ('showOpenFilePicker' in window) {
+            const [handle] = await window.showOpenFilePicker({
+                types: [{ description: 'Video Files', accept: { 'video/*': ['.mp4', '.mkv', '.mov', '.avi', '.webm'] } }]
+            });
+            inputFileHandle = handle;
+            const file = await handle.getFile();
+            await loadVideo(file);
+        } else {
+            const input = document.getElementById('file-input') as HTMLInputElement;
+            input.click();
+        }
+    } catch (err) {
+        console.log('File selection cancelled');
+    }
+}
+
+async function handleFileInput(e: Event): Promise<void> {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        await loadVideo(target.files[0]);
+    }
+}
 
 /**
- * Start the video upscaling process
+ * Load and setup video for processing
+ */
+async function loadVideo(file: File): Promise<void> {
+    inputFile = file;
+    const app = Alpine.store('app') as any;
+    app.state = 'loading';
+    app.filename = file.name;
+
+    const parts = file.name.split('.');
+    const ext = parts.pop() || 'mp4';
+    download_name = `${parts.join('.')}_upscaled.${ext}`;
+    app.download_name = download_name;
+
+    if (video) {
+        video.pause();
+        video.src = '';
+        video.load();
+    }
+
+    video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = URL.createObjectURL(file);
+
+    await new Promise<void>((resolve) => {
+        video.onloadedmetadata = () => resolve();
+    });
+
+    app.width = video.videoWidth;
+    app.height = video.videoHeight;
+
+    const targetTime = (isFinite(video.duration) && video.duration > 0) ? video.duration * 0.1 : 0;
+    video.currentTime = targetTime;
+
+    await new Promise<void>((resolve) => {
+        let resolved = false;
+        const done = () => { if (!resolved) { resolved = true; resolve(); } };
+        video.onseeked = done;
+        setTimeout(done, 500);
+    });
+
+    await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+        });
+    });
+
+    await setupPreview();
+    app.state = 'preview';
+}
+
+/**
+ * Setup preview canvases and WebSR instance
+ */
+async function setupPreview(): Promise<void> {
+    const bitmap = await createImageBitmap(video);
+
+    if (!canvasesTransferred) {
+        canvasesTransferred = true;
+        const offscreenUpscaled = upscaled_canvas.transferControlToOffscreen();
+        const offscreenOriginal = original_canvas.transferControlToOffscreen();
+
+        worker.postMessage({
+            cmd: 'init',
+            data: {
+                upscaled: offscreenUpscaled,
+                original: offscreenOriginal,
+                bitmap,
+                resolution: { width: video.videoWidth, height: video.videoHeight }
+            }
+        }, [offscreenUpscaled, offscreenOriginal, bitmap]);
+    } else {
+        worker.postMessage({
+            cmd: 'network',
+            data: {
+                name: networks[size].name,
+                bitmap,
+                weights: weights[size][content]
+            }
+        }, [bitmap]);
+    }
+
+    setTimeout(() => {
+        const element = document.getElementById('image-compare');
+        if (element) {
+            element.innerHTML = '';
+            element.appendChild(original_canvas);
+            element.appendChild(upscaled_canvas);
+            new ImageCompare(element, { controlColor: '#06b6d4' }).mount();
+        }
+    }, 100);
+}
+
+/**
+ * Switch AI neural model size
+ */
+async function switchModel(modelName: NetworkSize): Promise<void> {
+    size = modelName;
+    const app = Alpine.store('app') as any;
+    app.network = modelName;
+
+    if (video && video.videoWidth) {
+        const bitmap = await createImageBitmap(video);
+        worker.postMessage({
+            cmd: 'network',
+            data: {
+                name: networks[size].name,
+                bitmap,
+                weights: weights[size][content]
+            }
+        }, [bitmap]);
+    }
+}
+
+/**
+ * Start upscaling process
  */
 async function initRecording(): Promise<void> {
-    Alpine.store('state', 'loading');
-
-    let bitrate = getBitrate();
-    const estimated_size = (bitrate / 8) * video.duration + (128 / 8) * video.duration; // Assume 128 kbps audio
-
-    let outputHandle: FileSystemFileHandle | undefined;
-
-    // Max Blob size - 10 MB (for testing, should be much higher in production)
-    if (estimated_size > MAX_FILE_BLOB_SIZE) {
-        try {
-            if (typeof window.showSaveFilePicker === 'function') {
-                outputHandle = await showFilePicker();
-            }
-        } catch (e) {
-            console.warn("Save file picker skipped or unsupported, processing as Blob:", e);
-            outputHandle = undefined;
-        }
-    }
+    const app = Alpine.store('app') as any;
+    app.state = 'processing';
+    app.progress = 0;
+    app.eta = 'calculating...';
 
     worker.postMessage({
         cmd: "process",
         inputHandle: inputFileHandle || inputFile,
-        outputHandle
+        outputHandle: undefined
     } satisfies WorkerRequestMessage);
 }
 
 /**
- * Display error message to user
+ * Toggle Pause / Resume
  */
-function showError(message: string): void {
-    Alpine.store('state', 'error');
-    Alpine.store('error', message);
-}
-
-/**
- * Calculate target bitrate based on video resolution
- */
-function getBitrate(): number {
-    return 5e6 * Math.sqrt((video.videoWidth * video.videoHeight * 4) / (1280 * 720));
-}
-
-/**
- * Format bytes into human-readable file size
- */
-function humanFileSize(bytes: number, si: boolean = false, dp: number = 1): string {
-    const thresh = si ? 1000 : 1024;
-
-    if (Math.abs(bytes) < thresh) {
-        return bytes + ' B';
+function togglePause(): void {
+    const app = Alpine.store('app') as any;
+    if (app.state === 'paused') {
+        worker.postMessage({ cmd: 'resume' });
+    } else {
+        worker.postMessage({ cmd: 'pause' });
     }
-
-    const units = si
-        ? ['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
-        : ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
-    let u = -1;
-    const r = 10 ** dp;
-
-    do {
-        bytes /= thresh;
-        ++u;
-    } while (Math.round(Math.abs(bytes) * r) / r >= thresh && u < units.length - 1);
-
-    return bytes.toFixed(dp) + ' ' + units[u];
 }
-
-/**
- * Show native file picker for saving output video
- */
-async function showFilePicker(): Promise<FileSystemFileHandle> {
-    const handle = await window.showSaveFilePicker({
-        startIn: 'downloads',
-        suggestedName: download_name,
-        types: [{
-            description: 'Video File',
-            accept: { 'video/mp4': ['.mp4'] }
-        }],
-    });
-
-    return handle;
-}
-
-
-
-
-
-
-
-
-
-
-
-
